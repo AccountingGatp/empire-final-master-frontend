@@ -1,7 +1,7 @@
 // Client for the Empire Express backend.
 
 export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://empire-final-api.vercel.app";
+  process.env.NEXT_PUBLIC_API_URL || "https://empire-final-master-backend.vercel.app";
 
 export type TaskStatus =
   | "pending"
