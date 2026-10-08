@@ -34,7 +34,7 @@ import {
 import { money, monthLabel, monthRange, previousMonth, when } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { DownloadsMatrix } from "@/components/close/downloads";
-import { FxTable, rateError } from "@/components/close/fx-table";
+import { FxSummary, FxTable, rateError } from "@/components/close/fx-table";
 import { JournalPanel } from "@/components/close/journal-panel";
 import { ViatorUploads } from "@/components/close/viator-uploads";
 import { RuleTestPanel } from "@/components/close/rule-test";
@@ -77,6 +77,7 @@ export default function HomePage() {
   const [month, setMonth] = useState("");
   const [run, setRun] = useState<Run | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [fxOpen, setFxOpen] = useState(false);
   const [restoring, setRestoring] = useState(true);
   const [isPolling, setIsPolling] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -439,8 +440,8 @@ export default function HomePage() {
           <StepSection
             id="fx"
             n={3}
-            title="Enter FX rates"
-            description="London is GBP; Amsterdam, Paris and Milan are EUR. Each row converts at its own payout date's banked rate."
+            title="FX rates"
+            description="London is GBP; Amsterdam, Paris and Milan are EUR. Rates are filled in automatically with the ECB rate for each payout date — open the table only if you want to use a different rate."
             state={states.fx}
             lockedReason="Available once the downloads have finished."
             actions={
@@ -452,7 +453,10 @@ export default function HomePage() {
             }
           >
             {stepError("fx")}
-            {r && (
+            {r && r.fxRates.length > 0 && (
+              <FxSummary run={r} open={fxOpen} onToggle={() => setFxOpen((v) => !v)} />
+            )}
+            {r && (fxOpen || r.fxRates.length === 0 || r.fxRates.some((x) => x.rate === null)) && (
               <FxTable
                 key={JSON.stringify(r.fxRates.map((x) => [x.location, x.currency, x.date, x.rate]))}
                 run={r}
@@ -492,7 +496,7 @@ export default function HomePage() {
                 accepted={r.acceptedDiffs}
                 onAccept={onAccept("xola")}
                 onDownload={onDownloadJournal("xola")}
-                emptyHint={fxMissing ? `Enter the ${fxMissing} missing FX rate(s) in step 3 first — the build is blocked until they're in.` : "Click “Build XOLA” to create the journal and run the 14 checks."}
+                emptyHint={fxMissing ? `Enter the ${fxMissing} missing FX rate(s) in step 3 first — the build is blocked until they're in.` : "Click “Build XOLA” to create the journal and run the checks."}
                 extraDownloads={[
                   {
                     key: "office",

@@ -108,12 +108,12 @@ export function FxTable({
   return (
     <div className="space-y-3">
       <p className="text-sm text-muted-foreground">
-        Enter the <span className="font-medium text-foreground">banked rate</span> (USD per 1 unit) from the Wise deposit in QBO
-        for each payout date —{" "}
+        Rates are USD per 1 unit, filled automatically with the ECB rate for each payout date. To use a different rate — the
+        banked Wise rate from QBO, or an average — type it in (or use “Same rate for many dates”) and click Save rates. Limits:{" "}
         {Object.entries(limits)
           .map(([cur, l]) => `${cur}: ${l.bankAccount}, ${l.min}–${l.max}`)
           .join(" · ")}
-        . Averages from the internet are not allowed by the SOP.
+        .
       </p>
 
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/5 px-3 py-2.5">
@@ -184,7 +184,7 @@ export function FxTable({
                     {err && touched && <p className="mt-1 text-xs text-red-700 dark:text-red-300">{err}</p>}
                     {originOf(r) === "ecb" && (
                       <p className="mt-1 text-[0.7rem] text-sky-700 dark:text-sky-300">
-                        ECB market rate{ecb[k] ? ` of ${ecb[k].rateDate}` : ""} — check vs Wise
+                        ECB rate{ecb[k] ? ` of ${ecb[k].rateDate}` : " (automatic)"}
                       </p>
                     )}
                     {r.enteredBy && !dirty && <p className="mt-1 text-[0.7rem] text-muted-foreground">by {r.enteredBy}</p>}
@@ -273,6 +273,44 @@ function QuickFill({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Compact view of step 3 (shown by default): how many rates, where they came
+// from, and a button to open the full table for anyone who wants other rates.
+export function FxSummary({ run, open, onToggle }: { run: Run; open: boolean; onToggle: () => void }) {
+  const total = run.fxRates.length;
+  const empty = run.fxRates.filter((r) => r.rate === null).length;
+  const ecb = run.fxRates.filter((r) => r.rate !== null && r.origin === "ecb").length;
+  const manual = total - empty - ecb;
+  const byCur = [...new Set(run.fxRates.map((r) => r.currency))]
+    .map((c) => {
+      const rs = run.fxRates.filter((r) => r.currency === c && r.rate !== null).map((r) => Number(r.rate));
+      if (!rs.length) return `${c}: —`;
+      const min = Math.min(...rs);
+      const max = Math.max(...rs);
+      return `${c} ${min === max ? min : `${min}–${max}`}`;
+    })
+    .join(" · ");
+  return (
+    <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-background px-3 py-2.5">
+      <div className="min-w-0 text-sm">
+        {empty === 0 ? (
+          <p className="font-medium">
+            All {total} rates filled{ecb ? ` — ${ecb} automatic (ECB)` : ""}
+            {manual ? `${ecb ? "," : " —"} ${manual} entered by hand` : ""}.
+          </p>
+        ) : (
+          <p className="font-medium text-amber-800 dark:text-amber-300">
+            {empty} of {total} rates still empty — the ECB rate could not be fetched for them. Fill them in below.
+          </p>
+        )}
+        <p className="text-xs text-muted-foreground">{byCur}</p>
+      </div>
+      <Button size="sm" variant="outline" onClick={onToggle}>
+        {open ? "Hide rates" : "View / change rates"}
+      </Button>
     </div>
   );
 }
