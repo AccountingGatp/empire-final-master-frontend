@@ -70,7 +70,7 @@ export function FxTable({
       setSuggestMsg(
         res.problems.length
           ? { tone: "warn", text: `Filled ${res.suggestions.length} rows. Not found: ${res.problems.join("; ")}` }
-          : { tone: "info", text: `Filled ${res.suggestions.length} rows with the ECB market rate for each payout date. Check each against the Wise deposit, then Save.` }
+          : { tone: "info", text: `Filled ${res.suggestions.length} rows with the ECB market rate for each payout date. Check each against the Wise deposit, then click “Save rates” at the bottom.` }
       );
     } catch (e) {
       setSuggestMsg({ tone: "danger", text: `Could not get ECB rates: ${(e as Error).message}` });
@@ -203,12 +203,23 @@ export function FxTable({
         </table>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div
+        className={cn(
+          "flex flex-wrap items-center gap-3",
+          dirty && "sticky bottom-3 z-10 rounded-xl border border-amber-500/40 bg-amber-50 px-3 py-2.5 shadow-sm dark:bg-amber-950"
+        )}
+      >
         <Button onClick={save} disabled={!dirty || saving}>
           <Save /> {saving ? "Saving…" : "Save rates"}
         </Button>
-        <span className="text-sm text-muted-foreground">
-          {missing === 0 ? "All rates filled in and within limits." : `${missing} rate${missing === 1 ? "" : "s"} still needed — the journals can't be built until every rate is in.`}
+        <span className={cn("text-sm", dirty ? "font-medium text-amber-900 dark:text-amber-200" : "text-muted-foreground")}>
+          {dirty
+            ? missing === 0
+              ? "Not saved yet — click “Save rates”. The journals only use saved rates."
+              : `Not saved yet, and ${missing} rate${missing === 1 ? "" : "s"} still needed.`
+            : missing === 0
+              ? "All rates saved and within limits."
+              : `${missing} rate${missing === 1 ? "" : "s"} still needed — the journals can't be built until every rate is in.`}
         </span>
       </div>
     </div>

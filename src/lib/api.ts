@@ -1,7 +1,7 @@
 // Client for the Empire Express backend.
 
 export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL || "https://empire-final-master-backend.vercel.app";
+  process.env.NEXT_PUBLIC_API_URL || "https://empire-final-api.vercel.app";
 
 export type TaskStatus =
   | "pending"
@@ -107,6 +107,14 @@ export type Journal = {
     officeRows: number;
     clearingCents: number;
     grossUsdCents: number;
+    bySource?: {
+      source: string;
+      rows: number;
+      grossLocalCents: number;
+      netLocalCents: number;
+      netUsdCents: number | null;
+      postedTo: string;
+    }[];
   }[];
   // DEF / VIA: per-location figures
   figures: {

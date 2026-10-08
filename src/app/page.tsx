@@ -38,6 +38,7 @@ import { FxTable, rateError } from "@/components/close/fx-table";
 import { JournalPanel } from "@/components/close/journal-panel";
 import { ViatorUploads } from "@/components/close/viator-uploads";
 import { RuleTestPanel } from "@/components/close/rule-test";
+import { SourceBreakdown } from "@/components/close/source-breakdown";
 import { Notice, Stat, StepIcon, StepSection, inputClass, type StepState } from "@/components/close/ui";
 
 type StepId = "month" | "files" | "fx" | "xola" | "deferred" | "viator" | "checks";
@@ -62,6 +63,15 @@ function journalState(j: Journal): StepState {
 }
 
 const isBuilt = (j: Journal) => ["ready", "blocked"].includes(j.status) && !!j.generatedAt;
+
+// True when `iso` is on or before the last day of the month (`to` = YYYY-MM-DD),
+// i.e. the month was not over yet.
+function beforeMonthEnd(iso: string | null | undefined, to: string) {
+  if (!iso || !to) return false;
+  const end = new Date(`${to}T00:00:00`);
+  end.setDate(end.getDate() + 1);
+  return new Date(iso) < end;
+}
 
 export default function HomePage() {
   const [month, setMonth] = useState("");
@@ -213,6 +223,7 @@ export default function HomePage() {
 
   // ---- step states ------------------------------------------------------------
   const r = runForMonth;
+  const viatorInXola = settings?.options?.viatorInXola === true;
   const running = !!r && r.status === "running";
   const settled = !!r && !running;
   const fxMissing = r ? r.fxRates.filter((x) => rateError(x.currency, x.rate === null ? "" : String(x.rate), settings?.fxLimits || { GBP: { min: 1.25, max: 1.45, bankAccount: "" }, EUR: { min: 1.05, max: 1.25, bankAccount: "" } })).length : 0;
@@ -334,6 +345,11 @@ export default function HomePage() {
               </div>
             </div>
 
+            {!r && range && beforeMonthEnd(new Date().toISOString(), range.to) && (
+              <Notice tone="warn" className="mt-4" title={`${monthLabel(month)} is not over yet`}>
+                Xola will only have bookings up to today. For the month-end close, wait until {range.to} has passed.
+              </Notice>
+            )}
             {r && (
               <div className="mt-4 space-y-2">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
@@ -354,6 +370,12 @@ export default function HomePage() {
                   </span>
                 </div>
                 <Progress value={pct} />
+                {beforeMonthEnd(r.createdAt, r.to) && (
+                  <Notice tone="warn" title={`Downloaded before ${monthLabel(r.month)} ended`}>
+                    These files were exported on {when(r.createdAt)}, so the last days of the month are missing. Click
+                    “Download again” now that the month is over.
+                  </Notice>
+                )}
                 {running && !isPolling && (
                   <p className="text-xs text-muted-foreground">
                     This month is still downloading. Click “Resume watching” to follow it, or “Download again” to start over.
@@ -453,7 +475,11 @@ export default function HomePage() {
             id="xola"
             n={4}
             title="Build the Xola sales journal"
-            description="From each company's Transactions sheet: clearing account per Source, fees, gross — Viator and unpaid office bookings left out."
+            description={
+              viatorInXola
+                ? "From each company's Transactions sheet: clearing account per Source (Xola, GYG, Airbnb, Groupon, Viator), fees, gross — unpaid office bookings left out."
+                : "From each company's Transactions sheet: clearing account per Source, fees, gross — Viator and unpaid office bookings left out."
+            }
             state={states.xola}
             lockedReason="Available once the downloads have finished."
             actions={buildButton("xola", "XOLA")}
@@ -477,6 +503,7 @@ export default function HomePage() {
                 ]}
                 figures={
                   r.journals.xola.locations.length > 0 && (
+                    <div className="space-y-3">
                     <div className="overflow-x-auto rounded-xl border">
                       <table className="w-full min-w-[720px] text-sm">
                         <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
@@ -506,6 +533,8 @@ export default function HomePage() {
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                    <SourceBreakdown locations={r.journals.xola.locations} />
                     </div>
                   )
                 }
@@ -600,7 +629,11 @@ export default function HomePage() {
             id="viator"
             n={6}
             title="Viator: upload advices and build"
-            description="One payment advice per entity. Posted at the net amount on the advice — no gross-up, no commission."
+            description={
+              viatorInXola
+                ? "Viator is already posted in the XOLA journal (10032 Viator Sales). Upload each entity's payment advice to check that clearing against what Viator paid — nothing extra is imported."
+                : "One payment advice per entity. Posted at the net amount on the advice — no gross-up, no commission."
+            }
             state={states.viator}
             lockedReason="Available once the downloads have finished."
             actions={buildButton("viator", "VIA", !r || r.viator.length === 0)}
