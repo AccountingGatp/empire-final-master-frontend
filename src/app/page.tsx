@@ -37,7 +37,6 @@ import { DownloadsMatrix } from "@/components/close/downloads";
 import { FxSummary, FxTable, rateError } from "@/components/close/fx-table";
 import { JournalPanel } from "@/components/close/journal-panel";
 import { ViatorUploads } from "@/components/close/viator-uploads";
-import { RuleTestPanel } from "@/components/close/rule-test";
 import { SourceBreakdown } from "@/components/close/source-breakdown";
 import { Notice, Stat, StepIcon, StepSection, inputClass, type StepState } from "@/components/close/ui";
 
@@ -622,7 +621,6 @@ export default function HomePage() {
                           </tbody>
                         </table>
                       </div>
-                      {r.journals.deferred.ruleTest && <RuleTestPanel test={r.journals.deferred.ruleTest} />}
                     </div>
                   )
                 }
