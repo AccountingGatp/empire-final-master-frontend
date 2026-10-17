@@ -551,7 +551,7 @@ export default function HomePage() {
             id="deferred"
             n={5}
             title="Build the deferred revenue journal"
-            description="Cash Flow (XOLA clearing) minus Recognized Earnings, per location. Never reversed."
+            description="Gross on the Cash Flow report minus Gross on the Recognized Earnings report (Previously Collected + Collected In Period), every row, posted per class. Never reversed."
             state={states.deferred}
             lockedReason="Build the XOLA journal first."
             actions={buildButton("deferred", "DEF")}
@@ -594,8 +594,8 @@ export default function HomePage() {
                   r.journals.deferred.figures.length > 0 && (
                     <div className="space-y-2">
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        <Stat label="Cash Flow" value={money(r.journals.deferred.figures.reduce((s, f) => s + (f.cashFlowCents || 0), 0))} />
-                        <Stat label="Recognized Earnings" value={money(r.journals.deferred.figures.reduce((s, f) => s + (f.recognizedCents || 0), 0))} />
+                        <Stat label="Cash Flow (gross)" value={money(r.journals.deferred.figures.reduce((s, f) => s + (f.cashFlowCents || 0), 0))} />
+                        <Stat label="Recognized Earnings (gross)" value={money(r.journals.deferred.figures.reduce((s, f) => s + (f.recognizedCents || 0), 0))} />
                         <Stat label="Deferred" value={money(r.journals.deferred.figures.reduce((s, f) => s + (f.deferredCents || 0), 0))} />
                       </div>
                       <div className="overflow-x-auto rounded-xl border">
@@ -603,8 +603,9 @@ export default function HomePage() {
                           <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
                             <tr>
                               <th className="px-3 py-2 font-medium">Location</th>
-                              <th className="px-3 py-2 text-right font-medium">Cash Flow</th>
-                              <th className="px-3 py-2 text-right font-medium">Recognized</th>
+                              <th className="px-3 py-2 font-medium">Class</th>
+                              <th className="px-3 py-2 text-right font-medium">Cash Flow gross</th>
+                              <th className="px-3 py-2 text-right font-medium">Recognized gross</th>
                               <th className="px-3 py-2 text-right font-medium">Deferred</th>
                             </tr>
                           </thead>
@@ -612,6 +613,7 @@ export default function HomePage() {
                             {r.journals.deferred.figures.map((f) => (
                               <tr key={f.location} className="border-t">
                                 <td className="px-3 py-2 font-medium">{f.location}</td>
+                                <td className="px-3 py-2 text-muted-foreground">{f.class}</td>
                                 <td className="px-3 py-2 text-right tabular-nums">{money(f.cashFlowCents)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums">{money(f.recognizedCents)}</td>
                                 <td className="px-3 py-2 text-right font-medium tabular-nums">{money(f.deferredCents)}</td>
