@@ -49,33 +49,33 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --background: oklch(0.985 0.004 270);
+  --foreground: oklch(0.22 0.03 270);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.22 0.03 270);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.22 0.03 270);
+  --primary: oklch(0.5 0.2 277);
+  --primary-foreground: oklch(0.99 0.005 277);
+  --secondary: oklch(0.96 0.015 277);
+  --secondary-foreground: oklch(0.32 0.1 277);
+  --muted: oklch(0.96 0.008 270);
+  --muted-foreground: oklch(0.5 0.025 270);
+  --accent: oklch(0.95 0.025 277);
+  --accent-foreground: oklch(0.32 0.1 277);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.92 0.01 270);
+  --input: oklch(0.9 0.012 270);
+  --ring: oklch(0.6 0.16 277);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
+  --radius: 0.875rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary: oklch(0.5 0.2 277);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.97 0 0);
   --sidebar-accent-foreground: oklch(0.205 0 0);
@@ -123,8 +123,22 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-image:
+      radial-gradient(60rem 28rem at 12% -8%, oklch(0.93 0.05 277 / 0.55), transparent 60%),
+      radial-gradient(50rem 24rem at 100% 0%, oklch(0.95 0.05 190 / 0.4), transparent 60%);
+    background-attachment: fixed;
   }
   html {
     @apply font-sans;
   }
+}
+
+@keyframes soft-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(0.5 0.2 277 / 0.35); }
+  50% { box-shadow: 0 0 0 8px oklch(0.5 0.2 277 / 0); }
+}
+.pulse-ring { animation: soft-pulse 2s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .pulse-ring { animation: none; }
+  html { scroll-behavior: auto !important; }
 }

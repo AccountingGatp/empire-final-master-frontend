@@ -75,6 +75,7 @@ export function DownloadsMatrix({
   onDownload: (t: FileTask) => void;
 }) {
   const [onlyProblems, setOnlyProblems] = useState(false);
+  const [showTable, setShowTable] = useState(false);
 
   const sellers = useMemo(() => {
     const names = new Set<string>();
@@ -88,6 +89,9 @@ export function DownloadsMatrix({
   const visible = onlyProblems
     ? sellers.filter((s) => COLUMNS.some((c) => find(c.type, s)?.status === "failed"))
     : sellers;
+
+  const failedCount = COLUMNS.reduce((n, c) => n + run[c.type].filter((t) => t.status === "failed").length, 0);
+  const tableOpen = showTable || failedCount > 0;
 
   return (
     <div className="space-y-3">
@@ -111,23 +115,29 @@ export function DownloadsMatrix({
                   <span className="text-muted-foreground"> / {tasks.length}</span>
                 </span>
               </div>
-              <p className="mt-0.5 text-xs text-muted-foreground">{c.marker}</p>
             </div>
           );
         })}
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <p className="text-xs text-muted-foreground">
-          Every file is opened after download and its Report Details sheet checked against the report type and month.
-        </p>
-        <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-          <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} />
-          Only problems
-        </label>
+        <button
+          type="button"
+          onClick={() => setShowTable((v) => !v)}
+          disabled={failedCount > 0}
+          className="text-sm font-medium text-primary hover:underline disabled:no-underline disabled:opacity-60"
+        >
+          {tableOpen ? (failedCount > 0 ? `${failedCount} failed — fix below` : "Hide file list") : `Show all ${sellers.length} companies`}
+        </button>
+        {tableOpen && failedCount > 0 && (
+          <label className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} />
+            Only problems
+          </label>
+        )}
       </div>
 
-      <div className="overflow-x-auto rounded-xl border">
+      {tableOpen && <div className="max-h-96 overflow-auto rounded-xl border">
         <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
             <tr>
@@ -166,7 +176,7 @@ export function DownloadsMatrix({
             )}
           </tbody>
         </table>
-      </div>
+      </div>}
     </div>
   );
 }

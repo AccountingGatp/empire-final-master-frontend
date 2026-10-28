@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, FileSpreadsheet, Hammer, Layers, Loader2, PlayCircle, RefreshCw, RotateCw } from "lucide-react";
+import { ArrowRight, Download, FileSpreadsheet, Hammer, Layers, Loader2, PlayCircle, RefreshCw, RotateCw, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -38,7 +38,7 @@ import { FxSummary, FxTable, rateError } from "@/components/close/fx-table";
 import { JournalPanel } from "@/components/close/journal-panel";
 import { ViatorUploads } from "@/components/close/viator-uploads";
 import { SourceBreakdown } from "@/components/close/source-breakdown";
-import { Notice, Stat, StepIcon, StepSection, inputClass, type StepState } from "@/components/close/ui";
+import { Notice, Stat, StepSection, inputClass, type StepState } from "@/components/close/ui";
 
 type StepId = "month" | "files" | "fx" | "xola" | "deferred" | "viator" | "checks";
 
@@ -83,6 +83,9 @@ export default function HomePage() {
   const [errors, setErrors] = useState<Partial<Record<StepId, string>>>({});
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scannedFor = useRef<string | null>(null);
+  const settlePolls = useRef(0);
+  // Steps the person opened or closed by hand; forgotten whenever the current step moves on.
+  const [manual, setManual] = useState<{ at: StepId | null; map: Partial<Record<StepId, boolean>> }>({ at: null, map: {} });
 
   const range = monthRange(month);
   const runForMonth = run && run.month === month ? run : null;
@@ -108,7 +111,12 @@ export default function HomePage() {
     try {
       const next = await getRun(id);
       setRun(next);
-      if (!isBusy(next)) stopPolling();
+      if (!isBusy(next)) {
+        // The server now scans FX and builds the summaries by itself right after the
+        // downloads: keep watching a little longer so they appear without a click.
+        const followUps = next.doneTasks > 0 && next.summaries.account.status === "idle" && settlePolls.current++ < 8;
+        if (!followUps) stopPolling();
+      }
     } catch (e) {
       setError("files", (e as Error).message);
     }
@@ -184,6 +192,7 @@ export default function HomePage() {
   }
 
   function handleStart() {
+    settlePolls.current = 0;
     act("month", "start", async () => {
       const created = await startRun(month);
       ensurePolling(created.id);
@@ -255,14 +264,40 @@ export default function HomePage() {
 
   const stepError = (id: StepId) => errors[id] && <Notice tone="danger" className="mb-3">{errors[id]}</Notice>;
 
+  // ---- which step is "current" (the one that needs the person next) -----------------
+  const skipViator = !!r && viatorInXola && r.viator.length === 0;
+  const current: StepId | null =
+    STEPS.map((x) => x.id).find((id) => !(states[id] === "done" || states[id] === "locked" || (id === "viator" && skipViator))) ?? null;
+
+  // When the current step changes, scroll to it.
+  useEffect(() => {
+    if (restoring || !current || current === "month") return;
+    const t = setTimeout(() => document.getElementById(current)?.scrollIntoView({ behavior: "smooth", block: "start" }), 350);
+    return () => clearTimeout(t);
+  }, [current, restoring]);
+
+  const isOpen = (id: StepId) => (manual.at === current ? manual.map[id] : undefined) ?? current === id;
+  const sp = (id: StepId, n: number) => ({
+    id,
+    n,
+    state: states[id],
+    open: isOpen(id),
+    current: current === id,
+    quiet: id === "viator" && skipViator,
+    onToggle: () => setManual({ at: current, map: { ...(manual.at === current ? manual.map : {}), [id]: !isOpen(id) } }),
+  });
+  const jSummary = (j?: Journal) => (j?.journalNo && j.generatedAt ? `${j.journalNo} · ${j.stale ? "out of date" : j.status === "blocked" ? "blocked" : "built"}` : undefined);
+  const nextTitle = current === "month" ? (r ? "Wait for the downloads" : "Pick the month and start") : current ? STEPS.find((x) => x.id === current)?.title : null;
+
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-6 md:px-6 md:py-8">
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+    <main className="mx-auto w-full max-w-3xl px-4 py-6 md:px-6 md:py-10">
+      {/* Hero */}
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
-          <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">SOP-ACCT-SALES-001 v1.3</p>
-          <h1 className="text-2xl font-semibold tracking-tight">Month-end sales close{month && ` · ${monthLabel(month)}`}</h1>
-          <p className="text-sm text-muted-foreground">
-            Download Xola reports, enter FX rates, then build and check the XOLA, DEF and VIA journals for QuickBooks.
+          <h1 className="text-3xl font-bold tracking-tight">Month-end close</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {month ? monthLabel(month) : "Loading…"}
+            {r && ` · ${doneCount} of ${STEPS.length} steps done`}
           </p>
         </div>
         {r && (
@@ -271,42 +306,46 @@ export default function HomePage() {
             disabled={busy === "download" || r.doneTasks === 0 || running}
             onClick={() => download("files", () => downloadZip(r.id, r.month))}
           >
-            {busy === "download" ? <Loader2 className="animate-spin" /> : <Download />} Download everything (.zip)
+            {busy === "download" ? <Loader2 className="animate-spin" /> : <Download />} Download all
           </Button>
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
-        {/* Step rail */}
-        <nav className="hidden lg:block" aria-label="Steps">
-          <div className="sticky top-20 space-y-1">
-            <p className="mb-2 px-2 text-xs font-medium text-muted-foreground">
-              {doneCount} of {STEPS.length} steps done
-            </p>
-            {STEPS.map((s, i) => (
-              <a
-                key={s.id}
-                href={`#${s.id}`}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm transition hover:bg-muted",
-                  states[s.id] === "locked" && "text-muted-foreground"
-                )}
-              >
-                <StepIcon state={states[s.id]} n={i + 1} className="size-6" />
-                {s.title}
-              </a>
-            ))}
-          </div>
-        </nav>
+      {/* Progress strip */}
+      <div className="mb-6" aria-label="Progress">
+        <div className="flex gap-1.5">
+          {STEPS.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              title={s.title}
+              disabled={states[s.id] === "locked"}
+              onClick={() => document.getElementById(s.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              className={cn(
+                "h-2 flex-1 rounded-full transition-colors",
+                states[s.id] === "done" && "bg-emerald-500",
+                states[s.id] === "running" && "bg-primary/60 animate-pulse",
+                (states[s.id] === "todo" || states[s.id] === "warn") && !(s.id === "viator" && skipViator) && "bg-primary",
+                states[s.id] === "blocked" && "bg-red-500",
+                (states[s.id] === "locked" || (s.id === "viator" && skipViator && states[s.id] === "todo")) && "bg-border"
+              )}
+            />
+          ))}
+        </div>
+        {nextTitle && (
+          <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
+            <ArrowRight className="size-3.5 text-primary" /> Next: <span className="font-medium text-foreground">{nextTitle}</span>
+          </p>
+        )}
+      </div>
 
-        <div className="min-w-0 space-y-5">
+      <div className="space-y-3">
           {/* 1. Month */}
           <StepSection
-            id="month"
-            n={1}
-            title="Choose the month and download"
-            description="The first and last day of the month set the date range for every Xola export."
-            state={states.month}
+            {...sp("month", 1)}
+            title="Month and download"
+            description="Pick the month, then start. The downloads, FX rates and summaries run on their own."
+            summary={r ? `${r.doneTasks} of ${r.totalTasks} files verified · started ${when(r.createdAt)}` : undefined}
           >
             {stepError("month")}
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
@@ -335,12 +374,14 @@ export default function HomePage() {
                   </Button>
                 )}
                 <Button
+                  size={r ? "default" : "lg"}
+                  className={cn(!r && "pulse-ring px-6")}
                   onClick={handleStart}
                   disabled={busy !== null || isPolling || restoring || !range}
                   variant={r ? "outline" : "default"}
                 >
-                  {busy === "start" ? <Loader2 className="animate-spin" /> : r ? <RotateCw /> : <PlayCircle />}
-                  {r ? "Download again" : "Generate"}
+                  {busy === "start" ? <Loader2 className="animate-spin" /> : r ? <RotateCw /> : <Rocket />}
+                  {r ? "Download again" : "Start close"}
                 </Button>
               </div>
             </div>
@@ -355,7 +396,7 @@ export default function HomePage() {
                 <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
                   <span className="text-muted-foreground">
                     {r.phase === "fetching_delegators" && "Getting the seller list from Xola…"}
-                    {r.phase === "processing" && `Exporting ${r.totalTasks} files (${r.sellerCount} sellers × Cash Flow, Payout, Recognized Earnings)…`}
+                    {r.phase === "processing" && `Exporting ${r.totalTasks} files (${r.sellerCount} sellers × 3 reports)…`}
                     {r.phase === "done" &&
                       (r.status === "completed"
                         ? `All ${r.totalTasks} files downloaded and verified.`
@@ -365,8 +406,8 @@ export default function HomePage() {
                     {r.phase === "created" && "Starting…"}
                   </span>
                   <span className="text-xs text-muted-foreground">
-                    Started {when(r.createdAt)}
-                    {r.createdBy && ` by ${r.createdBy}`}
+                    {when(r.createdAt)}
+                    {r.createdBy && ` · ${r.createdBy}`}
                   </span>
                 </div>
                 <Progress value={pct} />
@@ -378,7 +419,7 @@ export default function HomePage() {
                 )}
                 {running && !isPolling && (
                   <p className="text-xs text-muted-foreground">
-                    This month is still downloading. Click “Resume watching” to follow it, or “Download again” to start over.
+                    Still downloading. Click “Resume watching” to follow it, or “Download again” to start over.
                   </p>
                 )}
               </div>
@@ -387,11 +428,10 @@ export default function HomePage() {
 
           {/* 2. Downloads */}
           <StepSection
-            id="files"
-            n={2}
-            title="Check the three downloads"
-            description="Cash Flow, Payout and Recognized Earnings for every company, each verified against its Report Details sheet."
-            state={states.files}
+            {...sp("files", 2)}
+            title="Check the downloads"
+            description="Cash Flow, Payout and Recognized Earnings for every company — each file is checked automatically."
+            summary={r ? `${r.doneTasks} verified${r.failedTasks ? ` · ${r.failedTasks} failed` : ""}` : undefined}
             lockedReason="Pick a month and click Generate."
           >
             {stepError("files")}
@@ -405,7 +445,7 @@ export default function HomePage() {
                 {settled && r.doneTasks > 0 && (
                   <div className="mt-4 flex flex-wrap items-center gap-2 border-t pt-4 text-sm">
                     <Layers className="size-4 text-muted-foreground" />
-                    <span className="text-muted-foreground">Combined Summary workbooks:</span>
+                    <span className="text-muted-foreground">Combined summaries (built automatically):</span>
                     <Button
                       size="sm"
                       variant="outline"
@@ -437,11 +477,10 @@ export default function HomePage() {
 
           {/* 3. FX */}
           <StepSection
-            id="fx"
-            n={3}
+            {...sp("fx", 3)}
             title="FX rates"
-            description="London is GBP; Amsterdam, Paris and Milan are EUR. Rates are filled in automatically with the ECB rate for each payout date — open the table only if you want to use a different rate."
-            state={states.fx}
+            description="Filled in automatically with the ECB rate for each payout date. Open the table only to change one."
+            summary={r && r.fxRates.length ? `${r.fxRates.length} rate${r.fxRates.length === 1 ? "" : "s"} filled` : undefined}
             lockedReason="Available once the downloads have finished."
             actions={
               r && (
@@ -475,15 +514,14 @@ export default function HomePage() {
 
           {/* 4. XOLA */}
           <StepSection
-            id="xola"
-            n={4}
+            {...sp("xola", 4)}
             title="Build the Xola sales journal"
             description={
               viatorInXola
-                ? "From each company's Transactions sheet: clearing account per Source (Xola, GYG, Airbnb, Groupon, Viator), fees, gross — unpaid office bookings left out."
-                : "From each company's Transactions sheet: clearing account per Source, fees, gross — Viator and unpaid office bookings left out."
+                ? "Built from each company's Transactions sheet. Unpaid office bookings are left out."
+                : "Built from each company's Transactions sheet. Viator and unpaid office bookings are left out."
             }
-            state={states.xola}
+            summary={jSummary(r?.journals.xola)}
             lockedReason="Available once the downloads have finished."
             actions={buildButton("xola", "XOLA")}
           >
@@ -547,11 +585,10 @@ export default function HomePage() {
 
           {/* 5. Deferred */}
           <StepSection
-            id="deferred"
-            n={5}
+            {...sp("deferred", 5)}
             title="Build the deferred revenue journal"
-            description="Gross on the Cash Flow report minus Gross on the Recognized Earnings report (Previously Collected + Collected In Period), every row, posted per class. Never reversed."
-            state={states.deferred}
+            description="Cash Flow gross minus Recognized Earnings gross, posted per class."
+            summary={jSummary(r?.journals.deferred)}
             lockedReason="Build the XOLA journal first."
             actions={buildButton("deferred", "DEF")}
           >
@@ -630,15 +667,14 @@ export default function HomePage() {
 
           {/* 6. Viator */}
           <StepSection
-            id="viator"
-            n={6}
-            title="Viator: upload advices and build"
+            {...sp("viator", 6)}
+            title="Viator"
             description={
               viatorInXola
-                ? "Viator is already posted in the XOLA journal (10032 Viator Sales). Upload each entity's payment advice to check that clearing against what Viator paid — nothing extra is imported."
-                : "One payment advice per entity. Posted at the net amount on the advice — no gross-up, no commission."
+                ? "Already posted in the XOLA journal. Optionally upload each payment advice to check it."
+                : "Upload one payment advice per entity. Posted at the net amount."
             }
-            state={states.viator}
+            summary={jSummary(r?.journals.viator) ?? (skipViator ? "Optional — nothing to upload" : undefined)}
             lockedReason="Available once the downloads have finished."
             actions={buildButton("viator", "VIA", !r || r.viator.length === 0)}
           >
@@ -698,11 +734,10 @@ export default function HomePage() {
 
           {/* 7. Checks file */}
           <StepSection
-            id="checks"
-            n={7}
-            title="Download the checks file"
-            description="Every check result, the run date, who built it, the FX rates used and every accepted difference — for the close binder."
-            state={states.checks}
+            {...sp("checks", 7)}
+            title="Checks file"
+            description="Every check result, the FX rates used and every accepted difference — for the close binder."
+            summary={jSummary(r?.journals.checks)}
             lockedReason="Build at least one journal first."
           >
             {stepError("checks")}
@@ -726,7 +761,6 @@ export default function HomePage() {
               </div>
             )}
           </StepSection>
-        </div>
       </div>
     </main>
   );

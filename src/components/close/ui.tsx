@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { AlertCircle, AlertTriangle, CheckCircle2, CircleDashed, Loader2, Lock, XCircle } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, CircleDashed, Loader2, Lock, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export type Tone = "neutral" | "info" | "success" | "warn" | "danger";
@@ -94,46 +94,73 @@ export function StepSection({
   state,
   lockedReason,
   actions,
+  open,
+  current,
+  quiet,
+  onToggle,
+  summary,
   children,
 }: {
   id: string;
   n: number;
   title: string;
-  description: ReactNode;
+  description?: ReactNode;
   state: StepState;
   lockedReason?: string;
   actions?: ReactNode;
+  open: boolean;
+  current?: boolean;
+  quiet?: boolean;
+  onToggle: () => void;
+  summary?: ReactNode;
   children?: ReactNode;
 }) {
   const label = stateLabel[state];
+  const locked = state === "locked";
   return (
-    <section id={id} className="scroll-mt-20 rounded-2xl border bg-card shadow-xs">
-      <header className="flex flex-wrap items-start gap-3 border-b px-4 py-4 sm:px-5">
-        <StepIcon state={state} n={n} />
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-[0.95rem] font-semibold tracking-tight">
-              <span className="text-muted-foreground">Step {n} · </span>
-              {title}
-            </h2>
-            <Pill tone={label.tone} spin={state === "running"}>
-              {label.text}
-            </Pill>
+    <section
+      id={id}
+      className={cn(
+        "scroll-mt-24 rounded-2xl border bg-card transition-all duration-300",
+        current ? "border-primary/40 shadow-lg shadow-primary/10 ring-1 ring-primary/20" : "shadow-xs",
+        locked && "bg-card/60"
+      )}
+    >
+      <header className="flex flex-wrap items-center gap-3 px-4 py-3.5 sm:px-5">
+        <button
+          type="button"
+          onClick={onToggle}
+          disabled={locked}
+          aria-expanded={open}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default"
+        >
+          <StepIcon state={state} n={n} />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className={cn("text-[0.95rem] font-semibold tracking-tight", locked && "text-muted-foreground")}>{title}</h2>
+              {!locked && !current && !quiet && state !== "done" && <Pill tone={label.tone} spin={state === "running"}>{label.text}</Pill>}
+            </div>
+            {open && description && <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>}
+            {!open && summary && <p className="mt-0.5 truncate text-sm text-muted-foreground">{summary}</p>}
           </div>
-          <p className="mt-0.5 text-sm text-muted-foreground">{description}</p>
-        </div>
-        {actions && state !== "locked" && <div className="flex w-full flex-wrap gap-2 sm:w-auto">{actions}</div>}
+          {!locked && (
+            <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", open && "rotate-180")} />
+          )}
+        </button>
+        {actions && open && !locked && <div className="flex w-full flex-wrap gap-2 sm:w-auto">{actions}</div>}
       </header>
-      <div className="px-4 py-4 sm:px-5">
-        {state === "locked" ? (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <CircleDashed className="size-4" />
-            {lockedReason || "Finish the steps above first."}
-          </p>
-        ) : (
-          children
-        )}
-      </div>
+      {open && (
+        <div className="border-t px-4 py-4 sm:px-5">
+          {locked ? (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <CircleDashed className="size-4" />
+              {lockedReason || "Finish the steps above first."}
+            </p>
+          ) : (
+            children
+          )}
+        </div>
+      )}
     </section>
   );
 }
