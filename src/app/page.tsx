@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, Download, FileSpreadsheet, Hammer, Layers, Loader2, PlayCircle, RefreshCw, RotateCw, Rocket } from "lucide-react";
+import { ArrowRight, BookOpen, Download, FileSpreadsheet, Hammer, Layers, Loader2, PlayCircle, RefreshCw, RotateCw, Rocket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -38,6 +38,7 @@ import { FxSummary, FxTable, rateError } from "@/components/close/fx-table";
 import { JournalPanel } from "@/components/close/journal-panel";
 import { ViatorUploads } from "@/components/close/viator-uploads";
 import { SourceBreakdown } from "@/components/close/source-breakdown";
+import { SopGuide } from "@/components/close/sop-guide";
 import { Notice, Stat, StepSection, inputClass, type StepState } from "@/components/close/ui";
 
 type StepId = "month" | "files" | "fx" | "xola" | "deferred" | "viator" | "checks";
@@ -84,6 +85,7 @@ export default function HomePage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const scannedFor = useRef<string | null>(null);
   const settlePolls = useRef(0);
+  const [sopOpen, setSopOpen] = useState(false);
   // Steps the person opened or closed by hand; forgotten whenever the current step moves on.
   const [manual, setManual] = useState<{ at: StepId | null; map: Partial<Record<StepId, boolean>> }>({ at: null, map: {} });
 
@@ -300,16 +302,23 @@ export default function HomePage() {
             {r && ` · ${doneCount} of ${STEPS.length} steps done`}
           </p>
         </div>
-        {r && (
-          <Button
-            variant="outline"
-            disabled={busy === "download" || r.doneTasks === 0 || running}
-            onClick={() => download("files", () => downloadZip(r.id, r.month))}
-          >
-            {busy === "download" ? <Loader2 className="animate-spin" /> : <Download />} Download all
+        <div className="flex gap-2">
+          <Button variant="ghost" onClick={() => setSopOpen((v) => !v)}>
+            <BookOpen /> How to use
           </Button>
-        )}
+          {r && (
+            <Button
+              variant="outline"
+              disabled={busy === "download" || r.doneTasks === 0 || running}
+              onClick={() => download("files", () => downloadZip(r.id, r.month))}
+            >
+              {busy === "download" ? <Loader2 className="animate-spin" /> : <Download />} Download all
+            </Button>
+          )}
+        </div>
       </div>
+
+      <SopGuide open={sopOpen} onClose={() => setSopOpen(false)} />
 
       {/* Progress strip */}
       <div className="mb-6" aria-label="Progress">
@@ -545,6 +554,11 @@ export default function HomePage() {
                 figures={
                   r.journals.xola.locations.length > 0 && (
                     <div className="space-y-3">
+                    {!viatorInXola && (
+                      <Notice tone="info" title={`Viator sales left out of this entry: ${r.journals.xola.locations.reduce((n, l) => n + l.viatorRows, 0)} bookings`}>
+                        Xola lists them, but Viator is entered from the Viator portal reports (step 6). See “By Source” below for each location.
+                      </Notice>
+                    )}
                     <div className="overflow-x-auto rounded-xl border">
                       <table className="w-full min-w-[720px] text-sm">
                         <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
