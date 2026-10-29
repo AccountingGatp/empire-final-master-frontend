@@ -9,6 +9,8 @@ import {
   buildChecksFile,
   buildJournal,
   deleteViator,
+  getViatorPrices,
+  uploadViatorPrices,
   downloadJournal,
   downloadSummary,
   downloadTask,
@@ -30,13 +32,14 @@ import {
   type JournalKey,
   type Run,
   type Settings,
+  type ViatorPriceInfo,
 } from "@/lib/api";
 import { money, monthLabel, monthRange, previousMonth, when } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { DownloadsMatrix } from "@/components/close/downloads";
 import { FxSummary, FxTable, rateError } from "@/components/close/fx-table";
 import { JournalPanel } from "@/components/close/journal-panel";
-import { ViatorUploads } from "@/components/close/viator-uploads";
+import { ViatorPanel } from "@/components/close/viator-panel";
 import { SourceBreakdown } from "@/components/close/source-breakdown";
 import { SopGuide } from "@/components/close/sop-guide";
 import { Notice, Stat, StepSection, inputClass, type StepState } from "@/components/close/ui";
@@ -77,6 +80,7 @@ export default function HomePage() {
   const [month, setMonth] = useState("");
   const [run, setRun] = useState<Run | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [prices, setPrices] = useState<ViatorPriceInfo | null>(null);
   const [fxOpen, setFxOpen] = useState(false);
   const [restoring, setRestoring] = useState(true);
   const [isPolling, setIsPolling] = useState(false);
@@ -141,6 +145,9 @@ export default function HomePage() {
       setMonth(m);
       getSettings()
         .then((s) => !cancelled && setSettings(s))
+        .catch(() => {});
+      getViatorPrices()
+        .then((p) => !cancelled && setPrices(p))
         .catch(() => {});
       try {
         const existing = await getLatestRunForMonth(m);
@@ -238,7 +245,7 @@ export default function HomePage() {
   const running = !!r && r.status === "running";
   const settled = !!r && !running;
   const fxMissing = r ? r.fxRates.filter((x) => rateError(x.currency, x.rate === null ? "" : String(x.rate), settings?.fxLimits || { GBP: { min: 1.25, max: 1.45, bankAccount: "" }, EUR: { min: 1.05, max: 1.25, bankAccount: "" } })).length : 0;
-  const anyBuilt = !!r && (["xola", "deferred", "viator"] as JournalKey[]).some((k) => isBuilt(r.journals[k]));
+  const anyBuilt = !!r && (["xola", "deferred", "viator", "viatorDef"] as JournalKey[]).some((k) => isBuilt(r.journals[k]));
 
   const states: Record<StepId, StepState> = {
     month: !r ? "todo" : running ? "running" : r.status === "failed" ? "blocked" : "done",
@@ -246,7 +253,7 @@ export default function HomePage() {
     fx: !settled ? "locked" : !r.fxScannedAt ? "todo" : fxMissing ? "todo" : "done",
     xola: !settled ? "locked" : journalState(r.journals.xola),
     deferred: !settled || !isBuilt(r.journals.xola) ? "locked" : journalState(r.journals.deferred),
-    viator: !settled ? "locked" : r.viator.length === 0 && r.journals.viator.status === "idle" ? "todo" : journalState(r.journals.viator),
+    viator: !settled ? "locked" : journalState(r.journals.viator),
     checks: !anyBuilt ? "locked" : r.journals.checks.status === "ready" ? "done" : "todo",
   };
 
@@ -257,7 +264,7 @@ export default function HomePage() {
     const j = r?.journals[key];
     const again = j && j.status !== "idle";
     return (
-      <Button onClick={() => r && act(key, `build-${key}`, () => buildJournal(r.id, key))} disabled={disabled || busy !== null}>
+      <Button onClick={() => r && act(key === "viatorDef" ? "viator" : key, `build-${key}`, () => buildJournal(r.id, key))} disabled={disabled || busy !== null}>
         {busy === `build-${key}` ? <Loader2 className="animate-spin" /> : again ? <RotateCw /> : <Hammer />}
         {busy === `build-${key}` ? "Building…" : again ? `Rebuild ${label}` : `Build ${label}`}
       </Button>
@@ -267,9 +274,8 @@ export default function HomePage() {
   const stepError = (id: StepId) => errors[id] && <Notice tone="danger" className="mb-3">{errors[id]}</Notice>;
 
   // ---- which step is "current" (the one that needs the person next) -----------------
-  const skipViator = !!r && viatorInXola && r.viator.length === 0;
   const current: StepId | null =
-    STEPS.map((x) => x.id).find((id) => !(states[id] === "done" || states[id] === "locked" || (id === "viator" && skipViator))) ?? null;
+    STEPS.map((x) => x.id).find((id) => !(states[id] === "done" || states[id] === "locked")) ?? null;
 
   // When the current step changes, scroll to it.
   useEffect(() => {
@@ -285,7 +291,6 @@ export default function HomePage() {
     state: states[id],
     open: isOpen(id),
     current: current === id,
-    quiet: id === "viator" && skipViator,
     onToggle: () => setManual({ at: current, map: { ...(manual.at === current ? manual.map : {}), [id]: !isOpen(id) } }),
   });
   const jSummary = (j?: Journal) => (j?.journalNo && j.generatedAt ? `${j.journalNo} · ${j.stale ? "out of date" : j.status === "blocked" ? "blocked" : "built"}` : undefined);
@@ -334,9 +339,9 @@ export default function HomePage() {
                 "h-2 flex-1 rounded-full transition-colors",
                 states[s.id] === "done" && "bg-emerald-500",
                 states[s.id] === "running" && "bg-primary/60 animate-pulse",
-                (states[s.id] === "todo" || states[s.id] === "warn") && !(s.id === "viator" && skipViator) && "bg-primary",
+                (states[s.id] === "todo" || states[s.id] === "warn") && "bg-primary",
                 states[s.id] === "blocked" && "bg-red-500",
-                (states[s.id] === "locked" || (s.id === "viator" && skipViator && states[s.id] === "todo")) && "bg-border"
+                states[s.id] === "locked" && "bg-border"
               )}
             />
           ))}
@@ -683,64 +688,128 @@ export default function HomePage() {
           <StepSection
             {...sp("viator", 6)}
             title="Viator"
-            description={
-              viatorInXola
-                ? "Already posted in the XOLA journal. Optionally upload each payment advice to check it."
-                : "Upload one payment advice per entity. Posted at the net amount."
-            }
-            summary={jSummary(r?.journals.viator) ?? (skipViator ? "Optional — nothing to upload" : undefined)}
+            description="Sales and commission, and deferred revenue, for the six Viator accounts — from the Viator reports downloaded by hand."
+            summary={jSummary(r?.journals.viator)}
             lockedReason="Available once the downloads have finished."
-            actions={buildButton("viator", "VIA", !r || r.viator.length === 0)}
+            actions={buildButton("viator", "Viator journals", !r || !prices?.uploaded || r.viator.length === 0)}
           >
             {stepError("viator")}
             {r && (
               <div className="space-y-5">
-                <ViatorUploads
+                <ViatorPanel
                   run={r}
                   settings={settings}
-                  onUpload={async (location, file) => {
-                    const next = await uploadViator(r.id, location, file);
-                    setRun(next);
-                    setRun(await scanFx(r.id)); // an advice may need a rate
+                  prices={prices}
+                  onUploadFiles={async (file) => {
+                    const res = await uploadViator(r.id, file);
+                    setRun(res.run);
+                    return { added: res.added.length, skipped: res.skipped };
                   }}
-                  onDelete={(id) => act("viator", "delete", () => deleteViator(r.id, id))}
-                  onDownload={(t) => download("viator", () => downloadTask(t.id, t.fileName || "advice"))}
+                  onUploadPrices={async (file) => {
+                    setPrices(await uploadViatorPrices(file));
+                  }}
+                  onRemove={async (ids) => {
+                    await act("viator", "delete", async () => {
+                      let next: Run | void = undefined;
+                      for (const id of ids) next = await deleteViator(r.id, id);
+                      return next;
+                    });
+                  }}
                 />
                 {(r.journals.viator.status !== "idle" || r.journals.viator.generatedAt) && (
-                  <JournalPanel
-                    journalKey="viator"
-                    journal={r.journals.viator}
-                    accepted={r.acceptedDiffs}
-                    onAccept={onAccept("viator")}
-                    onDownload={onDownloadJournal("viator")}
-                    emptyHint=""
-                    figures={
-                      r.journals.viator.figures.length > 0 && (
-                        <div className="overflow-x-auto rounded-xl border">
-                          <table className="w-full min-w-[560px] text-sm">
-                            <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
-                              <tr>
-                                <th className="px-3 py-2 font-medium">Location</th>
-                                <th className="px-3 py-2 font-medium">Class</th>
-                                <th className="px-3 py-2 text-right font-medium">Advice (local)</th>
-                                <th className="px-3 py-2 text-right font-medium">Posted (USD)</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {r.journals.viator.figures.map((f) => (
-                                <tr key={f.location} className="border-t">
-                                  <td className="px-3 py-2 font-medium">{f.location}</td>
-                                  <td className="px-3 py-2 text-muted-foreground">{f.class}</td>
-                                  <td className="px-3 py-2 text-right tabular-nums">{money(f.adviceLocalCents, f.currency)}</td>
-                                  <td className="px-3 py-2 text-right font-medium tabular-nums">{money(f.adviceUsdCents)}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )
-                    }
-                  />
+                  <>
+                    <div>
+                      <h3 className="mb-2 text-sm font-semibold">Sales &amp; commission journal</h3>
+                      <JournalPanel
+                        journalKey="viator"
+                        journal={r.journals.viator}
+                        accepted={r.acceptedDiffs}
+                        onAccept={onAccept("viator")}
+                        onDownload={onDownloadJournal("viator")}
+                        extraDownloads={[
+                          {
+                            key: "viatorWork",
+                            label: "Workings (every booking + exceptions)",
+                            name: r.journals.viatorWork.fileName || "VIATOR-WORKINGS.xlsx",
+                            enabled: r.journals.viatorWork.status === "ready" && !r.journals.viator.stale,
+                          },
+                        ]}
+                        emptyHint=""
+                        figures={
+                          r.journals.viator.figures.length > 0 && (
+                            <div className="overflow-x-auto rounded-xl border">
+                              <table className="w-full min-w-[620px] text-sm">
+                                <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
+                                  <tr>
+                                    <th className="px-3 py-2 font-medium">Account</th>
+                                    <th className="px-3 py-2 text-right font-medium">Bookings</th>
+                                    <th className="px-3 py-2 text-right font-medium">Sales (local)</th>
+                                    <th className="px-3 py-2 text-right font-medium">Commission</th>
+                                    <th className="px-3 py-2 text-right font-medium">Sales (USD)</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {r.journals.viator.figures.map((f) => (
+                                    <tr key={f.location} className="border-t">
+                                      <td className="px-3 py-2 font-medium">{f.label || f.location}</td>
+                                      <td className="px-3 py-2 text-right tabular-nums">
+                                        {f.bookings}
+                                        {!!f.unpriced && <span className="ml-1 text-xs text-amber-700 dark:text-amber-300">({f.unpriced} unpriced)</span>}
+                                      </td>
+                                      <td className="px-3 py-2 text-right tabular-nums">{money(f.salesLocalCents, f.currency)}</td>
+                                      <td className="px-3 py-2 text-right tabular-nums">
+                                        {money(f.commissionLocalCents)} <span className="text-xs text-muted-foreground">{((f.commissionPct || 0) * 100).toFixed(1)}%</span>
+                                      </td>
+                                      <td className="px-3 py-2 text-right font-medium tabular-nums">{money(f.salesCents)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )
+                        }
+                      />
+                    </div>
+                    <div>
+                      <h3 className="mb-2 text-sm font-semibold">Viator deferred revenue journal</h3>
+                      <JournalPanel
+                        journalKey="viatorDef"
+                        journal={r.journals.viatorDef}
+                        accepted={r.acceptedDiffs}
+                        onAccept={onAccept("viatorDef")}
+                        onDownload={onDownloadJournal("viator")}
+                        emptyHint=""
+                        figures={
+                          r.journals.viatorDef.figures.length > 0 && (
+                            <div className="overflow-x-auto rounded-xl border">
+                              <table className="w-full min-w-[620px] text-sm">
+                                <thead className="bg-muted/60 text-left text-xs text-muted-foreground">
+                                  <tr>
+                                    <th className="px-3 py-2 font-medium">Account</th>
+                                    <th className="px-3 py-2 text-right font-medium">Booked in month</th>
+                                    <th className="px-3 py-2 text-right font-medium">Travelled in month</th>
+                                    <th className="px-3 py-2 text-right font-medium">Deferred (local)</th>
+                                    <th className="px-3 py-2 text-right font-medium">Deferred (USD)</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {r.journals.viatorDef.figures.map((f) => (
+                                    <tr key={f.location} className="border-t">
+                                      <td className="px-3 py-2 font-medium">{f.label || f.location}</td>
+                                      <td className="px-3 py-2 text-right tabular-nums">{money(f.cashFlowLocalCents, f.currency)}</td>
+                                      <td className="px-3 py-2 text-right tabular-nums">{money(f.recognizedLocalCents, f.currency)}</td>
+                                      <td className="px-3 py-2 text-right tabular-nums">{money(f.deferredLocalCents, f.currency)}</td>
+                                      <td className="px-3 py-2 text-right font-medium tabular-nums">{money(f.deferredCents)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )
+                        }
+                      />
+                    </div>
+                  </>
                 )}
               </div>
             )}

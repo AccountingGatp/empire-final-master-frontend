@@ -16,11 +16,16 @@ export type ReportType = "account" | "payout" | "earnings";
 export type ReportCheck = { pass: boolean; found: string; message: string };
 
 export type ViatorParsed = {
-  parser: string;
-  paymentDate: string;
+  kind: "bookings" | "payout";
+  account: string;
+  label: string;
+  basis?: "booking" | "travel" | "both" | "empty";
+  month?: string;
+  paymentDate?: string;
   rowCount: number;
   currency: string;
   totalCents: number;
+  declaredCents?: number | null;
   warnings: string[];
   uploadedBy: string;
 };
@@ -75,8 +80,8 @@ export type JournalLine = {
   location: string;
 };
 
-export type JournalKey = "xola" | "deferred" | "viator";
-export type FileKey = JournalKey | "office" | "checks";
+export type JournalKey = "xola" | "deferred" | "viator" | "viatorDef";
+export type FileKey = JournalKey | "office" | "checks" | "viatorWork";
 
 export type Journal = {
   status: "idle" | "generating" | "ready" | "blocked" | "failed";
@@ -127,6 +132,20 @@ export type Journal = {
     adviceLocalCents?: number;
     adviceUsdCents?: number;
     files?: string[];
+    // Viator
+    label?: string;
+    bookings?: number;
+    travelling?: number;
+    rate?: number | null;
+    salesLocalCents?: number;
+    commissionLocalCents?: number;
+    commissionPct?: number;
+    salesCents?: number;
+    commissionCents?: number;
+    cashFlowLocalCents?: number;
+    recognizedLocalCents?: number;
+    deferredLocalCents?: number;
+    unpriced?: number;
   }[];
   notPosted: { sellerName: string; reason: string }[];
   // DEF only: which reading of SOP 10.5 gives the known Deferred total.
@@ -205,8 +224,10 @@ export type Settings = {
   fxLimits: Record<string, { min: number; max: number; bankAccount: string }>;
   options: Record<string, unknown>;
   names: Record<string, string>;
-  viatorAutoFetch: boolean;
+  viatorAccounts: { id: string; label: string; location: string; currency: string }[];
 };
+
+export type ViatorPriceInfo = { uploaded: boolean; builtIn?: boolean; fileName?: string; uploadedBy?: string; updatedAt?: string; rows?: number };
 
 export class ApiError extends Error {
   details: string[] | null;
@@ -278,6 +299,8 @@ function normalizeRun(r: Run): Run {
       office: { ...emptyJournal, ...j.office },
       deferred: { ...emptyJournal, ...j.deferred },
       viator: { ...emptyJournal, ...j.viator },
+      viatorDef: { ...emptyJournal, ...j.viatorDef },
+      viatorWork: { ...emptyJournal, ...j.viatorWork },
       checks: { ...emptyJournal, ...j.checks },
     },
   };
@@ -476,10 +499,33 @@ export async function buildChecksFile(runId: string): Promise<Run> {
 
 // ---- Viator --------------------------------------------------------------------
 
-export async function uploadViator(runId: string, location: string, file: File): Promise<Run> {
-  const qs = new URLSearchParams({ location, fileName: file.name });
-  return runJson(
+export type ViatorUploadResult = {
+  added: { fileName: string; account: string; kind: string; rows: number; replaced: boolean }[];
+  skipped: { fileName: string; reason: string }[];
+  run: Run;
+};
+
+// One Viator file, or a .zip of them.
+export async function uploadViator(runId: string, file: File): Promise<ViatorUploadResult> {
+  const qs = new URLSearchParams({ fileName: file.name });
+  const body = await json<ViatorUploadResult>(
     await fetch(`${API_URL}/api/runs/${runId}/viator?${qs}`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/octet-stream" }),
+      body: file,
+    })
+  );
+  return { ...body, run: normalizeRun(body.run) };
+}
+
+export async function getViatorPrices(): Promise<ViatorPriceInfo> {
+  return json(await fetch(`${API_URL}/api/viator/prices`, { headers: authHeaders() }));
+}
+
+export async function uploadViatorPrices(file: File): Promise<ViatorPriceInfo> {
+  const qs = new URLSearchParams({ fileName: file.name });
+  return json(
+    await fetch(`${API_URL}/api/viator/prices?${qs}`, {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/octet-stream" }),
       body: file,

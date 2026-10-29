@@ -15,15 +15,15 @@ const STEPS: { title: string; text: string }[] = [
   },
   {
     title: "Build the Xola sales journal",
-    text: "Made from the Cash Flow files. Viator sales that Xola also lists are left out here — they are entered from the Viator reports. The By Source table shows how many Viator sales were left out.",
+    text: "Made from the Cash Flow files. Viator sales that Xola also lists are left out here (their deferred revenue too) — Viator is entered from the Viator reports. The By Source table shows how many Viator sales were left out.",
   },
   {
     title: "Build the deferred revenue journal",
     text: "Cash Flow minus Recognized Earnings, posted per class.",
   },
   {
-    title: "Viator journal (last)",
-    text: "Upload each entity's Viator payment advice, then build the Viator journal.",
+    title: "Viator journals (last)",
+    text: "Download the Viator reports by hand for the six accounts: the bookings report by booking date, the bookings report by travel date, and the payment advices. Drop the zip in the Viator step (the product commission sheet is uploaded once). One build makes the sales & commission journal and the deferred journal, plus a workings file listing every booking and exception.",
   },
   {
     title: "Checks file",
