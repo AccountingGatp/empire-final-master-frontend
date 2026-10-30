@@ -23,7 +23,7 @@ const STEPS: { title: string; text: string }[] = [
   },
   {
     title: "Viator journals (last)",
-    text: "Download the Viator reports by hand for the six accounts: the bookings report by booking date, the bookings report by travel date, and the payment advices. Drop the zip in the Viator step (the product commission sheet is uploaded once). One build makes the sales & commission journal and the deferred journal, plus a workings file listing every booking and exception.",
+    text: "Download the Viator reports by hand for the six accounts: the bookings report by booking date, the bookings report by travel date, and the payment advices. Drop the zip in the Viator step (the Viator Product Commission List ships with the app; upload a new one only when prices change). One build makes the sales & commission journal and the deferred journal, plus a workings file listing every booking and exception.",
   },
   {
     title: "Checks file",

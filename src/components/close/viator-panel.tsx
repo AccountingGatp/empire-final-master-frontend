@@ -148,18 +148,18 @@ export function ViatorPanel({
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <Table2 className="size-4 text-muted-foreground" />
-          <p className="text-sm font-medium">1 · Product commission sheet</p>
+          <p className="text-sm font-medium">1 · Viator Product Commission List</p>
           {prices?.uploaded ? (
             <Pill tone="success">
               {prices.fileName} · {prices.rows} rows
             </Pill>
           ) : (
-            <Pill tone="warn">needed — prices per adult / senior / youth / child</Pill>
+            <Pill tone="warn">needed — the price list (one tab per location)</Pill>
           )}
         </div>
         {prices?.builtIn && (
           <p className="text-xs text-muted-foreground">
-            Using the prices read from the Viator portal ({prices.rows} product / tour-grade rows, incl. group-size prices for private tours). Upload a sheet only if prices change.
+            Using the Viator Product Commission List that ships with the app ({prices.rows} price rows incl. private group-size tiers). Upload a newer list only when Viator prices change — it replaces this one.
           </p>
         )}
         {prices?.uploaded && !prices.builtIn && prices.updatedAt && (
@@ -168,9 +168,9 @@ export function ViatorPanel({
           </p>
         )}
         <DropZone
-          accept=".xlsx,.xls,.csv"
+          accept=".xlsx,.xls"
           busy={busyPrices}
-          idle={prices?.uploaded ? "Drop a newer sheet to replace it (xlsx or csv)" : "Drop the Viator product commission sheet (xlsx or csv)"}
+          idle={prices?.uploaded ? "Drop a newer Viator_Product_Commission_List.xlsx to replace it" : "Drop Viator_Product_Commission_List.xlsx"}
           onFiles={uploadPrices}
         />
       </div>

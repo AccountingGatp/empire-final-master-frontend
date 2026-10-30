@@ -688,7 +688,7 @@ export default function HomePage() {
           <StepSection
             {...sp("viator", 6)}
             title="Viator"
-            description="Sales and commission, and deferred revenue, for the six Viator accounts — from the Viator reports downloaded by hand."
+            description="Sales and commission, and deferred revenue, for the six Viator accounts — from the Viator reports and the Viator Product Commission List."
             summary={jSummary(r?.journals.viator)}
             lockedReason="Available once the downloads have finished."
             actions={buildButton("viator", "Viator journals", !r || !prices?.uploaded || r.viator.length === 0)}
